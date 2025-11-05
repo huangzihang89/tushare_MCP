@@ -10,24 +10,35 @@ Tushare_MCP is an intelligent stock data assistant built on the Model Context Pr
 
 ### Core Components
 
-1. **server.py** - Main application entry point
-   - FastAPI app with MCP SSE integration
-   - Contains 30+ MCP tools for stock data retrieval
-   - Runs on port 8000 using Uvicorn
-   - SSE endpoint at `/sse` for MCP protocol communication
-
-2. **demo/hotlist.py** - Market hotlist and trend analysis module
-   - Tracks concept sector rankings from multiple platforms (开盘啦/KPL, 同花顺/THS, 东方财富/Eastmoney)
-   - Provides daily limit-up/limit-down stock queries
-   - Historical hotlist tracking and intersection analysis capabilities
-
-3. **demo/tushare_api_adapter.py** - API adapter utilities (if needed)
+**server.py** - Single-file application (1883 lines)
+- FastAPI app serving both HTTP API and MCP SSE protocol
+- Contains 30 MCP tools for stock data retrieval
+- Runs on port 8000 (default) or PORT env var for Cloud Run
+- Three endpoint types:
+  - `/` - Health check endpoint
+  - `/tools/setup_tinyshare_token` - HTTP POST API for token configuration
+  - `/sse` - MCP SSE handshake (GET) and `/sse/messages/` (POST) for MCP protocol
 
 ### Key Design Patterns
 
-- **Module-level Tushare Pro API initialization**: `PRO_API_INSTANCE` is initialized at module load with token from environment
-- **Helper function `_fetch_latest_report_data()`**: Fetches latest financial report data by filtering on announcement date
-- **SSE Workaround Pattern**: Custom SSE integration using `SseServerTransport` from `mcp.server.sse` mounted at `/sse` path with manual message routing
+**SSE Workaround for MCP Integration** (lines 1719-1759):
+- Uses `SseServerTransport` from `mcp.server.sse` instead of FastMCP's built-in SSE
+- Manual routing: GET `/sse` → `handle_mcp_sse_handshake()` → `mcp._mcp_server.run()`
+- POST `/sse/messages/` → `sse_transport.handle_post_message`
+- This workaround is necessary because FastMCP's `sse_app()` doesn't work correctly when mounted as sub-application
+
+**Financial Report Data Fetching** (lines 75-147):
+- `_fetch_latest_report_data()` helper abstracts the pattern:
+  1. Query API with filters (ts_code, period, etc.)
+  2. Filter results by period field matching
+  3. Sort by `ann_date` descending
+  4. Return latest announcement for that period
+  5. Supports `is_list_result=True` for multi-row results (e.g., top 10 holders)
+
+**Unified Logging & Error Handling**:
+- `log_debug()` wrapper (line 35-37) for consistent stderr logging
+- `@handle_exception` decorator defined (lines 39-55) but **not used** - all tools use manual try-except
+- All tools follow identical error handling pattern (see "Error Handling Pattern" section)
 
 ### Token Management
 
@@ -40,34 +51,58 @@ Token is stored at `~/.tushare_mcp/.env` with key `TUSHARE_TOKEN`. Functions:
 
 ### Setup
 ```bash
-# Create virtual environment
+# Create virtual environment (required on macOS with system-managed Python)
 python3 -m venv venv
 
 # Activate virtual environment
 source venv/bin/activate  # macOS/Linux
-# venv/Scripts/activate   # Windows
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
-### Running
+### Running Locally
 
 ```bash
 # Start the FastAPI server (listens on 0.0.0.0:8000)
 python server.py
 
-# The MCP SSE endpoint will be available at http://localhost:8000/sse
+# The MCP SSE endpoint will be available at:
+# - http://localhost:8000/sse (for MCP clients)
+# - http://localhost:8000/docs (FastAPI auto-generated docs)
 ```
 
-### Docker
+### Docker Deployment
 
 ```bash
 # Build image
 docker build -t tushare-mcp .
 
-# Run container (expects TUSHARE_TOKEN env var or Cloud Run's PORT env var)
+# Run container
 docker run -p 8080:8080 -e TUSHARE_TOKEN=your_token tushare-mcp
+
+# For Cloud Run deployment, expects PORT env var (defaults to 8080)
+```
+
+### Testing MCP Integration
+
+```bash
+# Test health endpoint
+curl http://localhost:8000/
+
+# Test token setup via HTTP API
+curl -X POST http://localhost:8000/tools/setup_tinyshare_token \
+  -H "Content-Type: application/json" \
+  -d '{"token": "your_tushare_token"}'
+
+# For MCP client testing, configure in your MCP client (e.g., Claude Desktop):
+# {
+#   "mcpServers": {
+#     "tushare": {
+#       "url": "http://localhost:8000/sse"
+#     }
+#   }
+# }
 ```
 
 ## MCP Tools Overview
@@ -166,9 +201,24 @@ except Exception as e:
 - `python-dotenv` - Environment variable management
 - `sse-starlette` - Server-Sent Events support (for MCP SSE transport)
 
-## Known Limitations
+## Known Limitations & Issues
 
-- No support for announcement/research report text data
+### Data Coverage
+- No announcement/research report text data
 - No minute-level or tick data
 - A-share and index data only; no futures, options, or macroeconomic data
 - Some financial APIs require higher Tushare point levels for full data access
+
+### Known Bugs
+- `get_fina_audit()` (line 1574-1606): **Will crash with KeyError**
+  - Line 1591 queries without `audit_fees` field
+  - Line 1598 attempts to access `row['audit_fees']`
+  - Fix: Add `audit_fees` to fields parameter or remove from output
+
+### Code Quality Issues
+- `@handle_exception` decorator (lines 39-55) is defined but never used
+- 28 tools all have identical try-except blocks that could use the decorator
+- Three similar formatting functions could be consolidated:
+  - `_format_indicator_value()` (line 758)
+  - `format_bs_value()` (line 1362)
+  - `format_cf_value()` (line 1433)
