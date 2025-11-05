@@ -1,157 +1,625 @@
-# Tushare_MCP
+# Tushare MCP 智能股票数据助手
 
 <div align="center">
 
-**基于 Model Context Protocol (MCP) 的智能股票数据助手**
+**基于 Model Context Protocol (MCP) 的 A 股数据查询服务**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
 
+通过自然语言对话获取中国股市数据，支持 Claude Desktop、Cursor 等 AI 工具
+
 </div>
 
-<br>
+---
 
-该项目基于 Tushare 的金融数据接口进行开发，支持的能力包括：
+## ⚠️ 重要说明
 
-1、工具调用，比方说股票的行情数据、更深度的财务数据以及指数数据等。
+本项目使用 **[tinyshare](https://github.com/yourusername/tinyshare)** SDK 作为数据源，**而非官方 tushare SDK**。
 
-2、提供安全的 Tushare Token 配置与状态检查机制。
+### tinyshare vs tushare
 
-3、通过 FastAPI 封装，提供标准化的 HTTP API 接口，方便与其他应用集成。
+| 特性 | tinyshare | tushare（官方） |
+|------|-----------|----------------|
+| Token 来源 | tinyshare 自定义 Token | Tushare Pro Token |
+| 安装包名 | `pip install tinyshare` | `pip install tushare` |
+| 导入方式 | `import tinyshare as ts` | `import tushare as ts` |
+| Token 配置 | `ts.set_token()` | `ts.set_token()` |
+| 数据接口 | 兼容 tushare API | 官方 API |
 
-<br>
+### 如果你想使用官方 tushare
 
-## 20250515 更新
-**支持基础的港股股票查询**
+需要修改 `server.py` 第 5 行：
 
-删除多余的测试文件
+```python
+# 当前代码（使用 tinyshare）
+import tinyshare as ts
 
-## 20250515 更新
-**新增 `hotlist.py`，一个强大的工具模块，专注于热点榜单追踪与深度题材挖掘！**
+# 修改为（使用官方 tushare）
+import tushare as ts
+```
 
-通过 `hotlist.py`，您可以轻松实现：
+然后在 `requirements.txt` 中将 `tinyshare` 替换为 `tushare`：
 
-*   **单一工具查询：** 快速获取特定日期、特定市场（如开盘啦、同花顺、东方财富）的概念板块列表、涨停跌停股票列表、或 App 实时热榜数据。
-*   **交集分析能力：** 组合不同平台的概念/题材及其成分股数据，高效定位那些被多个权威源共同认可的潜力板块或个股。
-*   **异动数据洞察：** 结合概念板块的成分股与涨停、跌停、热榜等数据，精准筛选出在特定题材内表现强势或出现关键信号的股票。
-*   **趋势研判辅助：** 查询某一概念板块在一段时间内的行情数据，或追踪某一股票/板块在历史数据中上榜的频率，辅助判断其热度持续性与资金关注度变化。
+```bash
+# 卸载 tinyshare
+pip uninstall tinyshare
 
-您可以向 AI 助手提出以下类型的问题（包括但不限于）：
+# 安装官方 tushare
+pip install tushare
 
-*   “今天同花顺有哪些热门概念板块？”
-*   “昨天有哪些股票涨停了？”
-*   “哪些股票同时是开盘啦的A题材和同花顺的B概念的成分股？”
-*   “在'人工智能'这个同花顺概念里，今天有哪些成分股涨停了？”
-*   “查询'新能源车'板块指数过去一个月的每日涨跌幅。”
-*   “帮我统计一下某只股票在过去一周内登上同花顺热股榜的次数。”
+# 获取 Token: https://tushare.pro/user/token
+```
 
-## ✨ 已支持能力
-*   **全面的股票数据查询：**
-    *   提供股票基本信息、实时行情（日线、指标）、历史股价变动查询。
-    *   支持通过股票代码或名称进行智能搜索。
+---
 
-<br>
+## 📖 项目简介
 
-*   **深度财务数据分析：**
-    *   获取上市公司详细财务报表，包括利润表、资产负债表、现金流量表。
-    *   查询关键财务指标数据。
+Tushare MCP 是一个智能股票数据查询服务，它将金融数据 API 包装成 MCP（Model Context Protocol）工具，让你可以通过 AI 助手用自然语言查询股票数据。
 
-<br>
+**核心特点：**
+- 🤖 **AI 友好**：通过 Claude、Cursor 等工具用对话方式查询股票数据
+- 📊 **数据全面**：覆盖 A 股、港股、指数的行情、财报、股东等 30+ 种数据
+- 🔒 **安全可靠**：Token 本地存储，支持 Docker 部署
+- 🚀 **即插即用**：一条命令启动，无需复杂配置
 
-*   **指数与市场数据覆盖：**
-    *   支持主流指数的基本信息查询、成分股获取及全球指数行情。
+---
 
-<br>
+## ✨ 核心功能
 
-*   **股东及公司基本面信息：**
-    *   查询股东户数、十大股东信息、每日股本市值以及股权质押明细。
+### 1️⃣ 股票基本信息
+- 查询 A 股、港股的基本信息（代码、名称、行业、上市日期等）
+- 支持模糊搜索：输入关键词快速找到目标股票
 
-<br>
+**示例问题：**
+> "查询平安银行的基本信息"
+> "搜索名称包含'新能源'的股票"
 
-*   **热门榜单与题材数据 (由 `hotlist.py` 提供)：**
-    *   **开盘啦 (KPL) 数据:**
-        *   概念题材列表查询 (可按日期、代码、名称筛选)。
-        *   概念题材成分股查询 (可按日期、题材代码、股票代码筛选)。
-        *   涨停、跌停、炸板、自然涨停、竞价等榜单数据获取。
-    *   **每日涨跌停统计:**
-        *   获取每日股票涨停(U)、跌停(D)和炸板(Z)的详细统计数据。
-    *   **同花顺 (THS) 数据:**
-        *   板块指数列表查询 (概念、行业、地域等)。
-        *   概念板块成分股查询。
-        *   板块指数每日行情数据。
-        *   同花顺App热榜数据 (热股、概念板块、ETF等)。
-    *   **东方财富 (Eastmoney) 数据:**
-        *   每日概念板块数据查询 (可按代码、名称、日期范围筛选)。
-        *   概念板块每日成分股查询。
+---
 
-## ❌ 未支持能力
-* 公告、研报等资讯类数据
-* 更细颗粒度的技术面数据 (分钟线、Tick行情)
-* 宏观经济数据、期货、期权等非股票类数据
+### 2️⃣ 实时行情与历史数据
+- 获取指定日期的开盘价、收盘价、最高价、最低价
+- 查询成交量、换手率、市盈率(PE)、市净率(PB)
+- 计算指定时间段的涨跌幅
+
+**示例问题：**
+> "平安银行今天的收盘价是多少？"
+> "查询茅台 2024 年 1 月到 3 月的股价走势"
+> "计算宁德时代从 9 月 1 日到 9 月 30 日的涨跌幅"
+
+---
+
+### 3️⃣ 财务报表深度查询
+- **利润表**：营业收入、净利润、研发费用、同比增长率等
+- **资产负债表**：总资产、负债、股东权益、货币资金等
+- **现金流量表**：经营/投资/筹资活动现金流
+- **财务指标**：ROE、毛利率、资产负债率、每股收益等
+
+**示例问题：**
+> "查询比亚迪 2024 年三季报的利润表"
+> "获取宁德时代 2023 年末的资产负债表"
+> "平安银行最近一期的 ROE 是多少？"
+
+---
+
+### 4️⃣ 股东与公司治理
+- 查询股东户数变化
+- 获取前十大股东/前十大流通股东持仓
+- 查看股权质押情况
+
+**示例问题：**
+> "查询贵州茅台 2024 年 9 月 30 日的股东户数"
+> "获取宁德时代最新的前十大股东"
+> "查询某某公司的股权质押情况"
+
+---
+
+### 5️⃣ 指数与板块数据
+- 搜索指数（沪深 300、上证 50、创业板指等）
+- 获取指数成分股及权重
+- 查询国际指数行情（富时 A50、恒生指数等）
+
+**示例问题：**
+> "查询沪深 300 指数的成分股"
+> "获取富时中国 A50 指数今天的涨跌幅"
+> "搜索名称包含'人工智能'的指数"
+
+---
+
+### 6️⃣ 特色数据
+- **龙虎榜**：每日大额交易明细、机构席位数据
+- **交易日历**：查询指定日期范围的交易日
+- **主营业务构成**：按产品/地区/行业的收入占比
+- **财务审计意见**：审计结果、会计师事务所信息
+
+**示例问题：**
+> "查询 2024 年 10 月 15 日的龙虎榜数据"
+> "获取 2024 年 11 月的所有交易日"
+> "查询比亚迪的主营业务收入构成"
+
+---
 
 ## 🚀 快速开始
 
-### 环境要求
+### 前置要求
 
-*   Python 3.8+
-*   Tushare 账号和 API Token (获取地址: [Tushare Pro Token 申请页面](https://tushare.pro/user/token)，请自行注册)
+1. **Python 3.8+**（macOS 用户推荐使用虚拟环境）
+2. **tinyshare Token** 或 **Tushare Pro Token**（见上方"重要说明"）
+
+---
 
 ### 安装步骤
 
-1.  **克隆仓库：**
-    ```bash
-    git clone <你的 GitHub 仓库 HTTPS 或 SSH链接>
-    cd <你的项目目录名>
-    ```
+#### 1. 克隆项目
+```bash
+git clone https://github.com/your-username/tushare-mcp.git
+cd tushare-mcp
+```
 
-2.  **创建并激活虚拟环境 (推荐)：**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # Linux/macOS
-    # venv/Scripts/activate   # Windows
-    ```
+#### 2. 创建虚拟环境（macOS 必需）
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
 
-3.  **安装依赖：**
-    ```bash
-    pip install -r requirements.txt
-    ```
+#### 3. 安装依赖
+```bash
+pip install -r requirements.txt
+```
 
-### 配置 Tushare Token
+> **注意**：`requirements.txt` 中包含 `tinyshare`。如果你要使用官方 tushare，请先编辑 `requirements.txt` 和 `server.py`（见上方说明）。
 
-本项目需要 Tushare API Token 才能正常工作。你有以下几种方式配置 Token：
+---
 
-1.  **通过 `.env` 文件 (推荐，安全)：**
-    *   在项目根目录下创建一个名为 `.env` 的文件 (此文件已被 `.gitignore` 忽略，不会提交到版本库)。
-    *   在 `.env` 文件中添加以下内容，并将 `<你的TUSHARE_TOKEN>` 替换为你的真实 Token：
-        ```
-        TUSHARE_TOKEN=<你的TUSHARE_TOKEN>
-        ```
-2.  **通过环境变量：**
-    在运行 `server.py` 之前，设置名为 `TUSHARE_TOKEN` 的环境变量。
-    ```bash
-    export TUSHARE_TOKEN="<你的TUSHARE_TOKEN>" # Linux/macOS
-    # set TUSHARE_TOKEN="<你的TUSHARE_TOKEN>"   # Windows (cmd)
-    # $env:TUSHARE_TOKEN="<你的TUSHARE_TOKEN>" # Windows (PowerShell)
-    ```
+### 配置 Token
+
+**方式 1：首次启动时配置（推荐）**
+
+直接启动服务，Token 会在首次使用工具时自动保存到 `~/.tushare_mcp/.env`：
+
+```bash
+python server.py
+```
+
+然后在 AI 助手中调用 `setup_tushare_token` 工具并输入你的 Token。
+
+**方式 2：手动创建配置文件**
+
+在 `~/.tushare_mcp/` 目录下创建 `.env` 文件：
+
+```bash
+mkdir -p ~/.tushare_mcp
+echo "TUSHARE_TOKEN=你的Token" > ~/.tushare_mcp/.env
+```
+
+> **Token 说明**：
+> - 使用 tinyshare：填写 tinyshare 提供的 Token
+> - 使用官方 tushare：前往 [Tushare Pro](https://tushare.pro/user/token) 获取
+
+---
 
 ### 启动服务
 
 ```bash
 python server.py
 ```
-在 AI IDE 软件中（如 Cursor 或 Trae） 的 MCP 服务中添加对应的 Servers
+
+看到以下输出说明启动成功：
+```
+INFO:     Started server process [xxxxx]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
+
+服务启动后可访问：
+- **健康检查**: http://localhost:8000/
+- **API 文档**: http://localhost:8000/docs
+- **MCP 端点**: http://localhost:8000/sse
+
+---
+
+## 🔧 使用方式
+
+### 方式 1：在 Claude Desktop 中使用
+
+编辑 Claude Desktop 配置文件：
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "tushare": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+重启 Claude Desktop，在对话中就可以直接提问：
+
+> "查询平安银行的股价"
+> "帮我分析比亚迪最新的财报数据"
+
+---
+
+### 方式 2：在 Cursor 中使用
+
+1. 打开 Cursor 设置（`Cmd/Ctrl + ,`）
+2. 搜索 "MCP Servers"
+3. 添加新服务器：
+   ```
+   名称: tushare
+   URL: http://localhost:8000/sse
+   ```
+4. 保存并重启 Cursor
+
+---
+
+### 方式 3：通过 HTTP API 直接调用
+
+服务同时提供标准的 HTTP API 接口：
+
+```bash
+# 查看所有可用接口（浏览器访问更友好）
+curl http://localhost:8000/docs
+
+# 配置 Token
+curl -X POST http://localhost:8000/tools/setup_tushare_token \
+  -H "Content-Type: application/json" \
+  -d '{"token": "你的Token"}'
+
+# 返回示例
+# {"status": "success", "message": "Token配置成功！您现在可以使用Tushare的API功能了。"}
+```
+
+---
+
+## 📋 完整工具列表
+
+### Token 管理（2 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `setup_tushare_token` | 配置 Token（首次使用必需） |
+| `check_token_status` | 检查 Token 是否有效 |
+
+### 股票基础信息（3 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_stock_basic_info` | 查询 A 股基本信息（代码/名称/行业等） |
+| `get_hk_stock_basic` | 查询港股基本信息 |
+| `search_stocks` | 模糊搜索股票（支持代码和名称） |
+
+### 行情数据（4 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_daily_prices` | 获取日线行情（开高低收、成交量） |
+| `get_daily_metrics` | 获取换手率、量比、PE/PB 等指标 |
+| `get_daily_basic_info` | 获取股本、市值数据 |
+| `get_period_price_change` | 计算指定区间涨跌幅 |
+
+### 财务数据（5 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_financial_indicator` | 查询综合财务指标（ROE/毛利率等） |
+| `get_income_statement` | 查询利润表（含同比增长率） |
+| `get_balance_sheet` | 查询资产负债表 |
+| `get_cash_flow` | 查询现金流量表 |
+| `get_fina_mainbz` | 查询主营业务构成（按产品/地区） |
+
+### 股东信息（2 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_shareholder_count` | 查询股东户数 |
+| `get_top_holders` | 查询前十大股东/流通股东 |
+
+### 指数数据（4 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `search_index` | 搜索指数（支持名称/市场/发布方） |
+| `get_index_list` | 获取指数列表（可按条件筛选） |
+| `get_index_constituents` | 获取指数成分股及权重 |
+| `get_global_index_quotes` | 查询国际指数行情（A50/恒指等） |
+
+### 特色数据（3 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_pledge_detail` | 查询股权质押统计 |
+| `get_top_list_detail` | 查询龙虎榜每日交易明细 |
+| `get_top_institution_detail` | 查询龙虎榜机构成交明细 |
+
+### 工具类（2 个工具）
+| 工具名称 | 功能说明 |
+|----------|----------|
+| `get_trade_calendar` | 获取交易日历（筛选开盘日） |
+| `get_start_date_for_n_days` | 计算往前 N 个交易日的日期 |
+
+**共计 25 个工具** ✨
+
+---
+
+## 🔍 数据格式说明
+
+### 日期格式
+所有日期使用 `YYYYMMDD` 格式：
+```
+20240930  →  2024年9月30日
+20231231  →  2023年12月31日
+```
+
+### 股票代码格式
+```
+A股（深圳）: 000001.SZ  →  平安银行
+A股（上海）: 600000.SH  →  浦发银行
+港股:       00700.HK   →  腾讯控股
+指数:       000300.SH  →  沪深300
+```
+
+### 金额单位
+- 财务数据：自动转换为 **亿元**（原始数据单位为元）
+- 股本数据：**万股**
+- 市值数据：**万元**
+
+---
+
+## 🐳 Docker 部署
+
+### 构建镜像
+```bash
+docker build -t tushare-mcp .
+```
+
+### 运行容器（使用 tinyshare）
+```bash
+docker run -d \
+  -p 8000:8000 \
+  -e TUSHARE_TOKEN=你的tinyshare_token \
+  --name tushare-mcp \
+  tushare-mcp
+```
+
+### 运行容器（使用官方 tushare）
+```bash
+# 1. 先修改 Dockerfile 或 server.py（将 tinyshare 改为 tushare）
+
+# 2. 重新构建镜像
+docker build -t tushare-mcp .
+
+# 3. 运行
+docker run -d \
+  -p 8000:8000 \
+  -e TUSHARE_TOKEN=你的tushare_pro_token \
+  --name tushare-mcp \
+  tushare-mcp
+```
+
+### 查看日志
+```bash
+docker logs -f tushare-mcp
+```
+
+### 停止和删除容器
+```bash
+docker stop tushare-mcp
+docker rm tushare-mcp
+```
+
+---
+
+## ❓ 常见问题
+
+### Q1: 提示 "Token 无效" 怎么办？
+
+**检查清单：**
+1. ✅ 确认使用的是正确的 Token（tinyshare Token 或 Tushare Pro Token）
+2. ✅ 如果使用 Tushare Pro，确认账号已激活（积分 ≥ 120）
+3. ✅ Token 前后没有多余空格
+4. ✅ 使用 `check_token_status` 工具验证
+
+```bash
+# 手动测试 Token（使用 tinyshare）
+python3 << EOF
+import tinyshare as ts
+ts.set_token('你的Token')
+pro = ts.pro_api()
+print(pro.stock_basic(ts_code='000001.SZ'))
+EOF
+```
+
+---
+
+### Q2: 查询报错 "积分不足"？
+
+**原因**：部分高级数据需要更高的 Tushare 积分等级。
+
+**解决方案**（仅针对官方 tushare）：
+- 完成新手任务（+100 积分）
+- 分享接口文档到社交媒体（+20 积分）
+- 邀请好友注册（每人 +50 积分）
+- 参与社区贡献
+
+详见：[Tushare 积分获取指南](https://tushare.pro/document/1?doc_id=13)
+
+**注意**：如果使用 tinyshare，请联系 tinyshare 提供方了解权限规则。
+
+---
+
+### Q3: 服务启动后无法访问？
+
+```bash
+# 1. 检查服务是否正在运行
+ps aux | grep server.py
+
+# 2. 检查端口是否被占用
+lsof -i :8000
+
+# 3. 尝试更换端口（修改 server.py 第 1873 行）
+# uvicorn.run(app, host="0.0.0.0", port=8001)
+
+# 4. 检查防火墙设置（macOS）
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+```
+
+---
+
+### Q4: Docker 容器无法连接？
+
+```bash
+# 检查容器状态
+docker ps -a
+
+# 查看容器日志
+docker logs tushare-mcp
+
+# 进入容器调试
+docker exec -it tushare-mcp bash
+
+# 检查容器内服务是否启动
+docker exec tushare-mcp curl http://localhost:8000/
+```
+
+---
+
+### Q5: 如何更新到最新版本？
+
+```bash
+# 1. 拉取最新代码
+git pull origin main
+
+# 2. 重新安装依赖（如有更新）
+pip install -r requirements.txt --upgrade
+
+# 3. 重启服务
+python server.py
+```
+
+---
+
+### Q6: 数据更新频率是多少？
+
+| 数据类型 | 更新时间 |
+|---------|---------|
+| 日线行情 | 交易日收盘后 30 分钟 |
+| 财务报表 | 公司公告发布后 1-2 小时 |
+| 龙虎榜 | 交易日次日上午 9:00 |
+| 股东数据 | 季报披露后更新 |
+
+---
+
+## 📌 注意事项
+
+### ✅ 支持的数据范围
+- A 股、港股的基本信息与行情
+- 财务报表（年报、中报、季报）
+- 股东信息、龙虎榜数据
+- 主流指数及国际指数
+
+### ❌ 不支持的数据范围
+- 分钟线、Tick 级别的高频数据
+- 期货、期权、债券等非股票品种
+- 公司公告、研报等文本资讯
+- 宏观经济数据（GDP、CPI 等）
+
+### ⚠️ API 限制（仅针对官方 tushare）
+- 免费账户：200 次/分钟
+- 高级接口：需要积分 ≥ 2000
+- 详见：[Tushare 接口权限说明](https://tushare.pro/document/1?doc_id=108)
+
+---
+
+## 🛠️ 故障排查
+
+### 服务无法启动
+
+```bash
+# 1. 检查 Python 版本
+python3 --version  # 需要 >= 3.8
+
+# 2. 检查依赖是否完整安装
+pip list | grep -E "tinyshare|fastapi|uvicorn|mcp"
+
+# 3. 查看详细错误日志
+python server.py 2>&1 | tee server.log
+
+# 4. 检查虚拟环境是否激活
+which python3  # 应该显示 venv 路径
+```
+
+---
+
+### Token 配置不生效
+
+```bash
+# 1. 检查配置文件是否存在
+cat ~/.tushare_mcp/.env
+
+# 2. 检查文件权限
+ls -la ~/.tushare_mcp/.env
+
+# 3. 手动创建配置（确保没有多余换行符）
+echo -n "TUSHARE_TOKEN=你的Token" > ~/.tushare_mcp/.env
+
+# 4. 验证 Token 格式（应该是一串字母+数字）
+cat ~/.tushare_mcp/.env | cut -d'=' -f2 | wc -c  # 长度应为 33（32字符+换行）
+```
+
+---
+
+### MCP 连接失败
+
+```bash
+# 1. 确认服务正在运行
+curl http://localhost:8000/
+
+# 2. 测试 SSE 端点
+curl http://localhost:8000/sse
+
+# 3. 检查 MCP 配置格式（JSON 必须合法）
+cat ~/Library/Application\ Support/Claude/claude_desktop_config.json | python3 -m json.tool
+
+# 4. 重启 AI 客户端
+# - Claude Desktop: 完全退出后重新打开
+# - Cursor: Cmd+Shift+P → "Reload Window"
+```
+
+---
 
 ## 📄 开源协议
 
-MIT License - 详见 [LICENSE](LICENSE) 文件 
+本项目基于 [MIT License](LICENSE) 开源，允许自由使用、修改和分发。
 
-## 本地环境说明
-Python 环境是由操作系统或外部工具（比如 Homebrew）管理的。为了保护系统级的 Python 安装，直接使用 pip3 install 来安装包到全局环境通常是不被允许的。需要通过激活虚拟环境（前提是创建虚拟环境）来完成
+---
 
-   ```bash
-   python3 -m venv venv
-   ```
-   
-   ```bash
-   source venv/bin/activate
-   ```
+## 🙏 致谢
+
+- **数据提供**：[tinyshare](https://github.com/yourusername/tinyshare) / [Tushare Pro](https://tushare.pro)
+- **协议框架**：[Anthropic MCP](https://github.com/anthropics/mcp)
+- **Web 框架**：[FastAPI](https://fastapi.tiangolo.com/)
+
+---
+
+## 📮 联系与支持
+
+### 遇到问题？
+
+1. 查看本文档的 [常见问题](#-常见问题) 章节
+2. 搜索 [已有 Issues](https://github.com/your-username/tushare-mcp/issues)
+3. 提交新的 [Issue](https://github.com/your-username/tushare-mcp/issues/new)
+
+### 想要贡献？
+
+欢迎提交 Pull Request！请确保：
+- 代码风格统一（使用 `black` 格式化）
+- 添加必要的注释和文档
+- 测试通过
+
+---
+
+<div align="center">
+
+**⭐ 如果这个项目对你有帮助，欢迎 Star 支持！**
+
+Made with ❤️ for the community
+
+</div>
