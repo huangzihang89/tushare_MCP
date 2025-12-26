@@ -1709,61 +1709,53 @@ def get_top_institution_detail(trade_date: str, ts_code: str = None) -> str:
         return f"获取龙虎榜机构成交明细失败：{str(e)}"
 
 # --- Start of MCP SSE Workaround Integration ---
-# Remove previous mounting attempt:
-# # Mount the FastMCP SSE application.
-# # The sse_app() method returns a Starlette application instance.
-# mcp_sse_app = mcp.sse_app()
-# app.mount("/sse", mcp_sse_app)
-# print("DEBUG: FastMCP SSE app instance mounted at /sse", file=sys.stderr, flush=True)
-
-MCP_BASE_PATH = "/sse" # The path where the MCP service will be available (e.g., https://.../sse)
+MCP_BASE_PATH = "/sse"
 
 print(f"DEBUG: Applying MCP SSE workaround for base path: {MCP_BASE_PATH}", file=sys.stderr, flush=True)
 
 try:
-    # 1. Initialize SseServerTransport.
-    # The `messages_endpoint_path` is the path that the client will be told to POST messages to.
-    # This path should be the full path, including our base path.
-    # The SseServerTransport will handle POSTs to this path.
     messages_full_path = f"{MCP_BASE_PATH}/messages/"
-    sse_transport = SseServerTransport(messages_full_path) # Directly pass the full path string
-    print(f"DEBUG: SseServerTransport initialized; client will be told messages are at: {messages_full_path}", file=sys.stderr, flush=True)
+    sse_transport = SseServerTransport(messages_full_path)
+    print(f"DEBUG: SseServerTransport initialized; messages endpoint: {messages_full_path}", file=sys.stderr, flush=True)
 
     async def handle_mcp_sse_handshake(request: Request) -> None:
-        """Handles the initial SSE handshake from the client."""
+        """处理 SSE 握手 (GET 请求)"""
         print(f"DEBUG: MCP SSE handshake request received for: {request.url}", file=sys.stderr, flush=True)
-        # request._send is a protected member, type: ignore is used.
         async with sse_transport.connect_sse(
             request.scope,
             request.receive,
-            request._send, # type: ignore 
+            request._send,  # type: ignore
         ) as (read_stream, write_stream):
-            print(f"DEBUG: MCP SSE connection established for {MCP_BASE_PATH}. Starting McpServer.run.", file=sys.stderr, flush=True)
-            # mcp is our FastMCP instance. _mcp_server is its underlying McpServer.
+            print(f"DEBUG: MCP SSE connection established. Starting McpServer.run.", file=sys.stderr, flush=True)
             await mcp._mcp_server.run(
                 read_stream,
                 write_stream,
                 mcp._mcp_server.create_initialization_options(),
             )
-            print(f"DEBUG: McpServer.run finished for {MCP_BASE_PATH}.", file=sys.stderr, flush=True)
+            print(f"DEBUG: McpServer.run finished.", file=sys.stderr, flush=True)
 
-    # 2. Add the route for the SSE handshake.
-    # Clients will make a GET request to this endpoint to initiate the SSE connection.
-    # e.g., GET https://mcp-api.chatbotbzy.top/sse
+    async def handle_mcp_messages(request: Request):
+        """处理 MCP 消息 (POST 请求) - 这是关键修复！"""
+        print(f"DEBUG: Received POST message at {messages_full_path}", file=sys.stderr, flush=True)
+        await sse_transport.handle_post_message(request.scope, request.receive, request._send)
+        from starlette.responses import Response
+        return Response(status_code=202)
+
+    # GET 端点 - SSE 握手
     app.add_route(MCP_BASE_PATH, handle_mcp_sse_handshake, methods=["GET"])
     print(f"DEBUG: MCP SSE handshake GET route added at: {MCP_BASE_PATH}", file=sys.stderr, flush=True)
 
-    # 3. Mount the ASGI app from sse_transport to handle POSTed messages.
-    # This will handle POST requests to https://mcp-api.chatbotbzy.top/sse/messages/
-    app.mount(messages_full_path, sse_transport.handle_post_message)
-    print(f"DEBUG: MCP SSE messages POST endpoint mounted at: {messages_full_path}", file=sys.stderr, flush=True)
+    # POST 端点 - 消息处理 ⭐ 关键修复
+    app.add_route(messages_full_path, handle_mcp_messages, methods=["POST"])
+    print(f"DEBUG: MCP SSE messages POST route added at: {messages_full_path}", file=sys.stderr, flush=True)
 
-    print(f"DEBUG: MCP SSE workaround for base path {MCP_BASE_PATH} applied successfully.", file=sys.stderr, flush=True)
+    print(f"DEBUG: MCP SSE workaround applied successfully.", file=sys.stderr, flush=True)
 
 except Exception as e_workaround:
     print(f"DEBUG: CRITICAL ERROR applying MCP SSE workaround: {str(e_workaround)}", file=sys.stderr, flush=True)
     traceback.print_exc(file=sys.stderr)
 # --- End of MCP SSE Workaround Integration ---
+
 
 @mcp.tool()
 def get_trade_calendar(exchange: str = '', start_date: str = None, end_date: str = None) -> str:
