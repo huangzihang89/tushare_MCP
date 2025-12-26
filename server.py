@@ -2,7 +2,7 @@ import sys
 import functools
 from pathlib import Path
 from typing import Optional, Callable, Any
-import tinyshare as ts
+import tushare as ts
 from dotenv import load_dotenv, set_key
 import pandas as pd
 from datetime import datetime, timedelta
